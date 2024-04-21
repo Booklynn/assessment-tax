@@ -19,6 +19,9 @@ services:
     environment:
       PORT: "8080"
       DATABASE_URL: "postgres://postgres:postgres@db:5432/ktaxes?sslmode=disable"
+      ADMIN_USERNAME: "adminTax"
+      ADMIN_PASSWORD: "admin!"
+
     ports:
       - "8080:8080"
     depends_on:
