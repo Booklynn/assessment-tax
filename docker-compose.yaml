@@ -1,9 +1,29 @@
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: ktaxes
+    volumes:
+      - ./db/query/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - '5432:5432'
+    restart: on-failure
+
+  assessment-tax-app:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    image: go-assessment-tax-app
+    environment:
+      PORT: "8080"
+      DATABASE_URL: "postgres://postgres:postgres@db:5432/ktaxes?sslmode=disable"
+      ADMIN_USERNAME: "adminTax"
+      ADMIN_PASSWORD: "admin!"
+
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    restart: on-failure
