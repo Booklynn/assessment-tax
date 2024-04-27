@@ -10,33 +10,25 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Booklynn/assessment-tax/tax"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	_ "github.com/lib/pq"
 )
 
+var Conn *sql.DB
+
 func main() {
-	connectDb()
+	tax.ConnectDb()
 
 	e := echo.New()
-	e.Use(addBasicAuthMiddleware())
+	//e.Use(addBasicAuthMiddleware())
 	registerRoutes(e)
 	startServer(e)
 }
 
-func connectDb() {
-	conn, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
-
-	if err != nil {
-		log.Fatal("Cannot connect to database.", err)
-	}
-
-	defer conn.Close()
-}
-
 func addBasicAuthMiddleware() echo.MiddlewareFunc {
 	authFn := func(username, password string, ctx echo.Context) (bool, error) {
-		adminUser, adminPassword := prepareAdminUserPas(os.Getenv("ADMIN_USERNAME"), os.Getenv("ADMIN_PASSWORD"))
+		adminUser, adminPassword := prepareAdminUserPass(os.Getenv("ADMIN_USERNAME"), os.Getenv("ADMIN_PASSWORD"))
 
 		return username == adminUser && password == adminPassword, nil
 	}
@@ -44,7 +36,7 @@ func addBasicAuthMiddleware() echo.MiddlewareFunc {
 	return middleware.BasicAuth(authFn)
 }
 
-func prepareAdminUserPas(username, password string) (adminUsername, adminPassword string) {
+func prepareAdminUserPass(username, password string) (adminUsername, adminPassword string) {
 	if username == "" && password == "" {
 		return "adminTax", "admin!"
 	}
@@ -54,6 +46,7 @@ func prepareAdminUserPas(username, password string) (adminUsername, adminPasswor
 
 func registerRoutes(e *echo.Echo) {
 	e.GET("/", handleRoot)
+	e.POST("/tax/calculations", tax.CalculateTax)
 }
 
 func handleRoot(c echo.Context) error {
