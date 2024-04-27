@@ -2,7 +2,6 @@ package tax
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"net/http"
 	"strings"
@@ -133,7 +132,7 @@ func getAllowancesAmount(requestBody TaxInfo) (float64, error) {
 			}
 
 			if allowance.Amount > donationAllowance {
-				return 0, fmt.Errorf("donation amount cannot be greater than %f", donationAllowance)
+				allowance.Amount = donationAllowance
 			}
 
 			allowancesAmount += allowance.Amount
@@ -146,7 +145,7 @@ func getAllowancesAmount(requestBody TaxInfo) (float64, error) {
 			}
 
 			if allowance.Amount > kReceiptAllowance {
-				return 0, fmt.Errorf("k-receipt amount cannot be greater than %f", kReceiptAllowance)
+				allowance.Amount = kReceiptAllowance
 			}
 
 			allowancesAmount += allowance.Amount
