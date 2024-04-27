@@ -29,3 +29,21 @@ func getPersonalAllowance() (float64, error) {
 	}
 	return personalAllowance, nil
 }
+
+func getDonationAllowance() (float64, error) {
+	var donationAllowance float64
+	err := conn.QueryRow("SELECT donation FROM allowances WHERE id = $1", 1).Scan(&donationAllowance)
+	if err != nil {
+		return 0, errors.New("no record found with the specified id")
+	}
+	return donationAllowance, nil
+}
+
+func getKReceiptAllowance() (float64, error) {
+	var kReceiptAllowance float64
+	err := conn.QueryRow(`SELECT "k-receipt" FROM allowances WHERE id = $1`, 1).Scan(&kReceiptAllowance)
+	if err != nil {
+		return 0, errors.New("no record found with the specified id")
+	}
+	return kReceiptAllowance, nil
+}
