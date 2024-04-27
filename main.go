@@ -21,7 +21,6 @@ func main() {
 	tax.ConnectDb()
 
 	e := echo.New()
-	//e.Use(addBasicAuthMiddleware())
 	registerRoutes(e)
 	startServer(e)
 }
@@ -47,6 +46,7 @@ func prepareAdminUserPass(username, password string) (adminUsername, adminPasswo
 func registerRoutes(e *echo.Echo) {
 	e.GET("/", handleRoot)
 	e.POST("/tax/calculations", tax.CalculateTax)
+	e.POST("/admin/deductions/personal", tax.SetPersonalAllowanceAmount, addBasicAuthMiddleware())
 }
 
 func handleRoot(c echo.Context) error {
