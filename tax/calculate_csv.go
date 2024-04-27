@@ -27,7 +27,7 @@ func CalculateTaxWithCSV(c echo.Context) error {
 
 	header, err := reader.Read()
 	if err != nil {
-		return err
+		return c.String(http.StatusInternalServerError, err.Error())
 	}
 
 	var taxCSV []TaxCSV
@@ -38,7 +38,7 @@ func CalculateTaxWithCSV(c echo.Context) error {
 			break
 		}
 		if err != nil {
-			return err
+			return c.String(http.StatusInternalServerError, err.Error())
 		}
 
 		totalIncome, wht, err := convertIncomeWthRowToFloat64(row)
@@ -67,7 +67,7 @@ func CalculateTaxWithCSV(c echo.Context) error {
 
 		personalAllowanceAmount, err := getPersonalAllowance()
 		if err != nil {
-			return err
+			return c.String(http.StatusInternalServerError, err.Error())
 		}
 
 		otherAllowancesAmount, err := getAllowancesAmount(taxInfo)
