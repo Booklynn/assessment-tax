@@ -320,8 +320,6 @@ func TestCalculateTaxWithErrorGetAllowancesAmount(t *testing.T) {
 	mock.ExpectQuery("SELECT personal FROM allowances WHERE id = ?").WithArgs(1).WillReturnRows(rows)
 	rows = mock.NewRows([]string{"donation"}).AddRow(100000)
 	mock.ExpectQuery("SELECT donation FROM allowances WHERE id = ?").WithArgs(1).WillReturnError(sql.ErrNoRows)
-	// rows = mock.NewRows([]string{"k-receipt"}).AddRow(50000)
-	// mock.ExpectQuery("SELECT k-receipt FROM allowances WHERE id = ?").WithArgs(1).WillReturnRows(rows)
 
 	e := echo.New()
 	requestBody := TaxInfo{
@@ -339,12 +337,6 @@ func TestCalculateTaxWithErrorGetAllowancesAmount(t *testing.T) {
 	require.NoError(t, errorCalculateTax)
 	require.NotEmpty(t, rec.Body)
 	require.Equal(t, http.StatusInternalServerError, rec.Code)
-
-	// var responseBody TaxPayable
-	// err := json.NewDecoder(rec.Body).Decode(&responseBody)
-	// require.NoError(t, err)
-	// require.NotEmpty(t, responseBody)
-	// require.Equal(t, 278000.0, responseBody.Tax)
 }
 
 func TestCalculateTaxWithdonationAmountMoreThanSetting(t *testing.T) {
