@@ -2,6 +2,7 @@ package tax
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"strings"
@@ -11,7 +12,6 @@ import (
 
 var allowedAllowances = map[string]bool{
 	"donation":  true,
-	"personal":  true,
 	"k-receipt": true,
 }
 
@@ -31,12 +31,18 @@ func CalculateTax(c echo.Context) error {
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 
-	personalAllowance, err := getPersonalAllowance()
+	personalAllowanceAmount, err := getPersonalAllowance()
 	if err != nil {
 		return err
 	}
 
-	tax := calculateTaxByLevels(requestBody.TotalIncome, personalAllowance)
+	otherAllowancesAmount, err := getAllowancesAmount(requestBody)
+	if err != nil {
+		return c.String(http.StatusBadRequest, err.Error())
+	}
+
+	allowancesAmount := personalAllowanceAmount + otherAllowancesAmount
+	tax := calculateTaxByLevels(requestBody.TotalIncome, allowancesAmount)
 
 	taxPayable := TaxPayable{
 		Tax: (math.Round(tax*100) / 100),
@@ -64,15 +70,32 @@ func checkTaxInfoNotNegative(taxInfo TaxInfo) error {
 }
 
 func checkValidTaxAllowances(requestBody TaxInfo) error {
+	allowanceTypes := []string{}
+
 	for _, allowance := range requestBody.Allowances {
+		allowanceType := strings.ToLower(allowance.AllowanceType)
+
 		if allowance.Amount < 0 {
 			return errors.New("allowance amount cannot be less than 0")
 		}
 
-		if !allowedAllowances[strings.ToLower(allowance.AllowanceType)] {
+		found := false
+		for _, existingType := range allowanceTypes {
+			if existingType == allowanceType {
+				found = true
+				return errors.New("found allowanceType duplication")
+			}
+		}
+
+		if !found {
+			allowanceTypes = append(allowanceTypes, allowanceType)
+		}
+
+		if !allowedAllowances[allowanceType] {
 			return errors.New("allowanceType not allowed")
 		}
 	}
+
 	return nil
 }
 
@@ -95,4 +118,40 @@ func calculateTaxByLevels(totalIncome, allowance float64) float64 {
 	default:
 		return (netIncome-2000000)*0.35 + (2000000-1000000)*0.20 + (1000000-500000)*0.15 + (500000-150000)*0.10
 	}
+}
+
+func getAllowancesAmount(requestBody TaxInfo) (float64, error) {
+	var allowancesAmount float64
+
+	for _, allowance := range requestBody.Allowances {
+		allowanceType := strings.ToLower(allowance.AllowanceType)
+
+		if allowanceType == "donation" {
+			donationAllowance, err := getDonationAllowance()
+			if err != nil {
+				return 0, err
+			}
+
+			if allowance.Amount > donationAllowance {
+				return 0, fmt.Errorf("donation amount cannot be greater than %f", donationAllowance)
+			}
+
+			allowancesAmount += allowance.Amount
+		}
+
+		if allowanceType == "k-receipt" {
+			kReceiptAllowance, err := getKReceiptAllowance()
+			if err != nil {
+				return 0, err
+			}
+
+			if allowance.Amount > kReceiptAllowance {
+				return 0, fmt.Errorf("k-receipt amount cannot be greater than %f", kReceiptAllowance)
+			}
+
+			allowancesAmount += allowance.Amount
+		}
+	}
+
+	return allowancesAmount, nil
 }
