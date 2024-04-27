@@ -29,15 +29,7 @@ func TestCalculateTaxValidRequest(t *testing.T) {
 		},
 	}
 
-	reqBodyJSON, err := json.Marshal(requestBody)
-	require.NoError(t, err)
-	require.NotEmpty(t, reqBodyJSON)
-
-	req := httptest.NewRequest(http.MethodPost, "/tax/calculations", strings.NewReader(string(reqBodyJSON)))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	require.NotEmpty(t, c)
+	rec, c := mockNewRequest(requestBody, t, e, "/tax/calculations")
 
 	errorCalculateTax := CalculateTax(c)
 
@@ -46,10 +38,72 @@ func TestCalculateTaxValidRequest(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var responseBody TaxPayable
-	err = json.NewDecoder(rec.Body).Decode(&responseBody)
+	err := json.NewDecoder(rec.Body).Decode(&responseBody)
 	require.NoError(t, err)
 	require.NotEmpty(t, responseBody)
 	require.Equal(t, float64(29000), responseBody.Tax)
+}
+
+func TestCalculateTaxWithWTHReturnTaxRefund(t *testing.T) {
+	db, mock := setupMockDB()
+	conn = db
+
+	rows := mock.NewRows([]string{"personal"}).AddRow(60000)
+	mock.ExpectQuery("SELECT personal FROM allowances WHERE id = ?").WithArgs(1).WillReturnRows(rows)
+
+	e := echo.New()
+	requestBody := TaxInfo{
+		TotalIncome: 500000.1,
+		WHT:         30000.1,
+		Allowances: []Allowances{
+			{AllowanceType: "donation", Amount: 0},
+		},
+	}
+
+	rec, c := mockNewRequest(requestBody, t, e, "/tax/calculations")
+
+	errorCalculateTax := CalculateTax(c)
+
+	require.NoError(t, errorCalculateTax)
+	require.NotEmpty(t, rec.Body)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var responseBody TaxReturnable
+	err := json.NewDecoder(rec.Body).Decode(&responseBody)
+	require.NoError(t, err)
+	require.NotEmpty(t, responseBody)
+	require.Equal(t, 1000.09, responseBody.TaxRefund)
+}
+
+func TestCalculateTaxWithWTHReturnTax(t *testing.T) {
+	db, mock := setupMockDB()
+	conn = db
+
+	rows := mock.NewRows([]string{"personal"}).AddRow(60000)
+	mock.ExpectQuery("SELECT personal FROM allowances WHERE id = ?").WithArgs(1).WillReturnRows(rows)
+
+	e := echo.New()
+	requestBody := TaxInfo{
+		TotalIncome: 500000.02,
+		WHT:         25000.21,
+		Allowances: []Allowances{
+			{AllowanceType: "donation", Amount: 0},
+		},
+	}
+
+	rec, c := mockNewRequest(requestBody, t, e, "/tax/calculations")
+
+	errorCalculateTax := CalculateTax(c)
+
+	require.NoError(t, errorCalculateTax)
+	require.NotEmpty(t, rec.Body)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var responseBody TaxPayable
+	err := json.NewDecoder(rec.Body).Decode(&responseBody)
+	require.NoError(t, err)
+	require.NotEmpty(t, responseBody)
+	require.Equal(t, 3999.79, responseBody.Tax)
 }
 
 func TestCalculateTaxInvalidRequest(t *testing.T) {
@@ -89,15 +143,7 @@ func TestCalculateTaxWithNegativeTotalIncome(t *testing.T) {
 		},
 	}
 
-	reqBodyJSON, err := json.Marshal(requestBody)
-	require.NoError(t, err)
-	require.NotEmpty(t, reqBodyJSON)
-
-	req := httptest.NewRequest(http.MethodPost, "/tax/calculations", strings.NewReader(string(reqBodyJSON)))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	require.NotEmpty(t, c)
+	rec, c := mockNewRequest(requestBody, t, e, "/tax/calculations")
 
 	errorCalculateTax := CalculateTax(c)
 
@@ -123,14 +169,7 @@ func TestCalculateTaxWithInvalidAllowanceType(t *testing.T) {
 		},
 	}
 
-	reqBodyJSON, err := json.Marshal(requestBody)
-	require.NoError(t, err)
-	require.NotEmpty(t, reqBodyJSON)
-
-	req := httptest.NewRequest(http.MethodPost, "/tax/calculations", strings.NewReader(string(reqBodyJSON)))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+	rec, c := mockNewRequest(requestBody, t, e, "/tax/calculations")
 
 	errorCalculateTax := CalculateTax(c)
 
@@ -155,14 +194,7 @@ func TestCalculateTaxWithErrorPersonalAllowance(t *testing.T) {
 		},
 	}
 
-	reqBodyJSON, err := json.Marshal(requestBody)
-	require.NoError(t, err)
-	require.NotEmpty(t, reqBodyJSON)
-
-	req := httptest.NewRequest(http.MethodPost, "/tax/calculations", strings.NewReader(string(reqBodyJSON)))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+	_, c := mockNewRequest(requestBody, t, e, "/tax/calculations")
 
 	errorCalculateTax := CalculateTax(c)
 
@@ -176,12 +208,16 @@ func TestCalculateTaxByLevels(t *testing.T) {
 	}{
 		{netIncome: 0, expectedTax: 0},
 		{netIncome: 1, expectedTax: 0},
+		{netIncome: 1.1, expectedTax: 0},
 		{netIncome: 150000, expectedTax: 0},
+		{netIncome: 150000.02, expectedTax: 0},
 		{netIncome: 150001, expectedTax: 0},
 		{netIncome: 499999, expectedTax: 28999.9},
 		{netIncome: 500000, expectedTax: 29000},
 		{netIncome: 500001, expectedTax: 29000.1},
+		{netIncome: 500001.51, expectedTax: 29000.15},
 		{netIncome: 999999, expectedTax: 100999.85},
+		{netIncome: 999999.99, expectedTax: 101000},
 		{netIncome: 1000000, expectedTax: 101000},
 		{netIncome: 1000001, expectedTax: 101000.15},
 		{netIncome: 1999999, expectedTax: 297999.8},
@@ -261,4 +297,17 @@ func TestCheckTaxAllowanceAmountNegativeReturnError(t *testing.T) {
 
 	require.Error(t, err)
 	require.EqualError(t, err, "allowance amount cannot be less than 0")
+}
+
+func mockNewRequest(requestBody TaxInfo, t *testing.T, e *echo.Echo, url string) (*httptest.ResponseRecorder, echo.Context) {
+	reqBodyJSON, err := json.Marshal(requestBody)
+	require.NoError(t, err)
+	require.NotEmpty(t, reqBodyJSON)
+
+	req := httptest.NewRequest(http.MethodPost, url, strings.NewReader(string(reqBodyJSON)))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	require.NotEmpty(t, c)
+	return rec, c
 }

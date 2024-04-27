@@ -38,11 +38,22 @@ func CalculateTax(c echo.Context) error {
 
 	tax := calculateTaxByLevels(requestBody.TotalIncome, personalAllowance)
 
-	responseBody := TaxPayable{
-		Tax: math.Round(tax*100) / 100,
+	taxPayable := TaxPayable{
+		Tax: (math.Round(tax*100) / 100),
 	}
 
-	return c.JSON(http.StatusOK, responseBody)
+	taxPayable.Tax = taxPayable.Tax - requestBody.WHT
+	taxPayable.Tax = math.Round(taxPayable.Tax*100) / 100
+
+	if taxPayable.Tax >= 0 {
+		return c.JSON(http.StatusOK, taxPayable)
+	}
+
+	taxReturnable := TaxReturnable{
+		TaxRefund: math.Round(math.Abs(taxPayable.Tax)*100) / 100,
+	}
+
+	return c.JSON(http.StatusOK, taxReturnable)
 }
 
 func checkTaxInfoNotNegative(taxInfo TaxInfo) error {
