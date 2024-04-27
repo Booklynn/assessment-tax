@@ -26,7 +26,7 @@ func TestCalculateTaxValidRequest(t *testing.T) {
 
 	e := echo.New()
 	requestBody := TaxInfo{
-		TotalIncome: 500000,
+		TotalIncome: 3000000,
 		WHT:         0.0,
 		Allowances: []Allowances{
 			{AllowanceType: "donation", Amount: 0},
@@ -46,7 +46,7 @@ func TestCalculateTaxValidRequest(t *testing.T) {
 	err := json.NewDecoder(rec.Body).Decode(&responseBody)
 	require.NoError(t, err)
 	require.NotEmpty(t, responseBody)
-	require.Equal(t, float64(29000), responseBody.Tax)
+	require.Equal(t, float64(639000), responseBody.Tax)
 }
 
 func TestCalculateTaxWithWTHReturnTaxRefund(t *testing.T) {
@@ -310,6 +310,33 @@ func TestCalculateTaxWithErrorKReceiptAllowance(t *testing.T) {
 	_, err := getAllowancesAmount(requestBody)
 
 	require.Error(t, err)
+}
+
+func TestCalculateTaxWithErrorGetAllowancesAmount(t *testing.T) {
+	db, mock := setupMockDB()
+	conn = db
+
+	rows := mock.NewRows([]string{"personal"}).AddRow(60000)
+	mock.ExpectQuery("SELECT personal FROM allowances WHERE id = ?").WithArgs(1).WillReturnRows(rows)
+	rows = mock.NewRows([]string{"donation"}).AddRow(100000)
+	mock.ExpectQuery("SELECT donation FROM allowances WHERE id = ?").WithArgs(1).WillReturnError(sql.ErrNoRows)
+
+	e := echo.New()
+	requestBody := TaxInfo{
+		TotalIncome: 2000000,
+		WHT:         0.0,
+		Allowances: []Allowances{
+			{AllowanceType: "donation", Amount: 200000},
+		},
+	}
+
+	rec, c := mockNewRequest(requestBody, t, e, "/tax/calculations")
+
+	errorCalculateTax := CalculateTax(c)
+
+	require.NoError(t, errorCalculateTax)
+	require.NotEmpty(t, rec.Body)
+	require.Equal(t, http.StatusInternalServerError, rec.Code)
 }
 
 func TestCalculateTaxWithdonationAmountMoreThanSetting(t *testing.T) {
