@@ -318,8 +318,6 @@ func TestCalculateTaxWithErrorGetAllowancesAmount(t *testing.T) {
 
 	rows := mock.NewRows([]string{"personal"}).AddRow(60000)
 	mock.ExpectQuery("SELECT personal FROM allowances WHERE id = ?").WithArgs(1).WillReturnRows(rows)
-	rows = mock.NewRows([]string{"donation"}).AddRow(100000)
-	mock.ExpectQuery("SELECT donation FROM allowances WHERE id = ?").WithArgs(1).WillReturnError(sql.ErrNoRows)
 
 	e := echo.New()
 	requestBody := TaxInfo{

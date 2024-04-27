@@ -25,3 +25,7 @@ type TaxLevel struct {
 	Level string  `json:"level"`
 	Tax   float64 `json:"tax"`
 }
+
+type AllowancesDeduction struct {
+	PersonalDeduction float64 `json:"personalDeduction"`
+}
