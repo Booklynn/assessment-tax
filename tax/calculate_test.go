@@ -26,7 +26,7 @@ func TestCalculateTaxValidRequest(t *testing.T) {
 
 	e := echo.New()
 	requestBody := TaxInfo{
-		TotalIncome: 500000,
+		TotalIncome: 3000000,
 		WHT:         0.0,
 		Allowances: []Allowances{
 			{AllowanceType: "donation", Amount: 0},
@@ -46,7 +46,7 @@ func TestCalculateTaxValidRequest(t *testing.T) {
 	err := json.NewDecoder(rec.Body).Decode(&responseBody)
 	require.NoError(t, err)
 	require.NotEmpty(t, responseBody)
-	require.Equal(t, float64(29000), responseBody.Tax)
+	require.Equal(t, float64(639000), responseBody.Tax)
 }
 
 func TestCalculateTaxWithWTHReturnTaxRefund(t *testing.T) {
@@ -312,7 +312,42 @@ func TestCalculateTaxWithErrorKReceiptAllowance(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestCalculateTaxWithInvalidDonationAmount(t *testing.T) {
+func TestCalculateTaxWithErrorGetAllowancesAmount(t *testing.T) {
+	db, mock := setupMockDB()
+	conn = db
+
+	rows := mock.NewRows([]string{"personal"}).AddRow(60000)
+	mock.ExpectQuery("SELECT personal FROM allowances WHERE id = ?").WithArgs(1).WillReturnRows(rows)
+	rows = mock.NewRows([]string{"donation"}).AddRow(100000)
+	mock.ExpectQuery("SELECT donation FROM allowances WHERE id = ?").WithArgs(1).WillReturnError(sql.ErrNoRows)
+	// rows = mock.NewRows([]string{"k-receipt"}).AddRow(50000)
+	// mock.ExpectQuery("SELECT k-receipt FROM allowances WHERE id = ?").WithArgs(1).WillReturnRows(rows)
+
+	e := echo.New()
+	requestBody := TaxInfo{
+		TotalIncome: 2000000,
+		WHT:         0.0,
+		Allowances: []Allowances{
+			{AllowanceType: "donation", Amount: 200000},
+		},
+	}
+
+	rec, c := mockNewRequest(requestBody, t, e, "/tax/calculations")
+
+	errorCalculateTax := CalculateTax(c)
+
+	require.NoError(t, errorCalculateTax)
+	require.NotEmpty(t, rec.Body)
+	require.Equal(t, http.StatusInternalServerError, rec.Code)
+
+	// var responseBody TaxPayable
+	// err := json.NewDecoder(rec.Body).Decode(&responseBody)
+	// require.NoError(t, err)
+	// require.NotEmpty(t, responseBody)
+	// require.Equal(t, 278000.0, responseBody.Tax)
+}
+
+func TestCalculateTaxWithdonationAmountMoreThanSetting(t *testing.T) {
 	db, mock := setupMockDB()
 	conn = db
 
@@ -325,10 +360,10 @@ func TestCalculateTaxWithInvalidDonationAmount(t *testing.T) {
 
 	e := echo.New()
 	requestBody := TaxInfo{
-		TotalIncome: 500000.1,
-		WHT:         30000.1,
+		TotalIncome: 2000000,
+		WHT:         0.0,
 		Allowances: []Allowances{
-			{AllowanceType: "donation", Amount: 100001},
+			{AllowanceType: "donation", Amount: 200000},
 		},
 	}
 
@@ -338,11 +373,16 @@ func TestCalculateTaxWithInvalidDonationAmount(t *testing.T) {
 
 	require.NoError(t, errorCalculateTax)
 	require.NotEmpty(t, rec.Body)
-	require.Equal(t, http.StatusBadRequest, rec.Code)
-	require.Equal(t, "donation amount cannot be greater than 100000.000000", rec.Body.String())
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var responseBody TaxPayable
+	err := json.NewDecoder(rec.Body).Decode(&responseBody)
+	require.NoError(t, err)
+	require.NotEmpty(t, responseBody)
+	require.Equal(t, 278000.0, responseBody.Tax)
 }
 
-func TestCalculateTaxWithInvalidKReceiptAmount(t *testing.T) {
+func TestCalculateTaxWithKReceiptAmountMoreThanSetting(t *testing.T) {
 	db, mock := setupMockDB()
 	conn = db
 
@@ -353,7 +393,7 @@ func TestCalculateTaxWithInvalidKReceiptAmount(t *testing.T) {
 
 	e := echo.New()
 	requestBody := TaxInfo{
-		TotalIncome: 500000.1,
+		TotalIncome: 1000000,
 		WHT:         30000.1,
 		Allowances: []Allowances{
 			{AllowanceType: "k-receipt", Amount: 50001},
@@ -366,8 +406,13 @@ func TestCalculateTaxWithInvalidKReceiptAmount(t *testing.T) {
 
 	require.NoError(t, errorCalculateTax)
 	require.NotEmpty(t, rec.Body)
-	require.Equal(t, http.StatusBadRequest, rec.Code)
-	require.Equal(t, "k-receipt amount cannot be greater than 50000.000000", rec.Body.String())
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var responseBody TaxPayable
+	err := json.NewDecoder(rec.Body).Decode(&responseBody)
+	require.NoError(t, err)
+	require.NotEmpty(t, responseBody)
+	require.Equal(t, 63499.9, responseBody.Tax)
 }
 
 func TestCalculateTaxByLevels(t *testing.T) {

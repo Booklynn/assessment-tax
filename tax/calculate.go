@@ -2,7 +2,6 @@ package tax
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"net/http"
 	"strings"
@@ -38,14 +37,16 @@ func CalculateTax(c echo.Context) error {
 
 	otherAllowancesAmount, err := getAllowancesAmount(requestBody)
 	if err != nil {
-		return c.String(http.StatusBadRequest, err.Error())
+		return c.String(http.StatusInternalServerError, err.Error())
 	}
 
 	allowancesAmount := personalAllowanceAmount + otherAllowancesAmount
 	tax := calculateTaxByLevels(requestBody.TotalIncome, allowancesAmount)
+	taxLevel := displayTaxLevel(requestBody.TotalIncome, allowancesAmount, tax)
 
 	taxPayable := TaxPayable{
-		Tax: (math.Round(tax*100) / 100),
+		Tax:       (math.Round(tax*100) / 100),
+		TaxLevels: taxLevel,
 	}
 
 	taxPayable.Tax = taxPayable.Tax - requestBody.WHT
@@ -57,6 +58,7 @@ func CalculateTax(c echo.Context) error {
 
 	taxReturnable := TaxReturnable{
 		TaxRefund: math.Round(math.Abs(taxPayable.Tax)*100) / 100,
+		TaxLevels: taxLevel,
 	}
 
 	return c.JSON(http.StatusOK, taxReturnable)
@@ -133,7 +135,7 @@ func getAllowancesAmount(requestBody TaxInfo) (float64, error) {
 			}
 
 			if allowance.Amount > donationAllowance {
-				return 0, fmt.Errorf("donation amount cannot be greater than %f", donationAllowance)
+				allowance.Amount = donationAllowance
 			}
 
 			allowancesAmount += allowance.Amount
@@ -146,7 +148,7 @@ func getAllowancesAmount(requestBody TaxInfo) (float64, error) {
 			}
 
 			if allowance.Amount > kReceiptAllowance {
-				return 0, fmt.Errorf("k-receipt amount cannot be greater than %f", kReceiptAllowance)
+				allowance.Amount = kReceiptAllowance
 			}
 
 			allowancesAmount += allowance.Amount
@@ -154,4 +156,29 @@ func getAllowancesAmount(requestBody TaxInfo) (float64, error) {
 	}
 
 	return allowancesAmount, nil
+}
+
+func displayTaxLevel(totalIncome, allowance, tax float64) []TaxLevel {
+	taxLevels := []TaxLevel{
+		{Level: "0-150,000", Tax: 0.0},
+		{Level: "150,001-500,000", Tax: 0.0},
+		{Level: "500,001-1,000,000", Tax: 0.0},
+		{Level: "1,000,001-2,000,000", Tax: 0.0},
+		{Level: "2,000,001 ขึ้นไป", Tax: 0.0},
+	}
+
+	switch {
+	case totalIncome-allowance <= 150000:
+		taxLevels[0].Tax = tax
+	case totalIncome-allowance <= 500000:
+		taxLevels[1].Tax = tax
+	case totalIncome-allowance <= 1000000:
+		taxLevels[2].Tax = tax
+	case totalIncome-allowance <= 2000000:
+		taxLevels[3].Tax = tax
+	default:
+		taxLevels[4].Tax = tax
+	}
+
+	return taxLevels
 }
