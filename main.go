@@ -47,6 +47,7 @@ func registerRoutes(e *echo.Echo) {
 	e.GET("/", handleRoot)
 	e.POST("/tax/calculations", tax.CalculateTax)
 	e.POST("/admin/deductions/personal", tax.SetPersonalAllowanceAmount, addBasicAuthMiddleware())
+	e.POST("/tax/calculations/upload-csv", tax.CalculateTaxWithCSV)
 }
 
 func handleRoot(c echo.Context) error {
