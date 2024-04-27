@@ -46,8 +46,9 @@ func prepareAdminUserPass(username, password string) (adminUsername, adminPasswo
 func registerRoutes(e *echo.Echo) {
 	e.GET("/", handleRoot)
 	e.POST("/tax/calculations", tax.CalculateTax)
-	e.POST("/admin/deductions/personal", tax.SetPersonalAllowanceAmount, addBasicAuthMiddleware())
 	e.POST("/tax/calculations/upload-csv", tax.CalculateTaxWithCSV)
+	e.POST("/admin/deductions/personal", tax.SetPersonalAllowanceAmount, addBasicAuthMiddleware())
+	e.POST("/admin/deductions/k-receipt", tax.SetKReceiptAllowanceAmount, addBasicAuthMiddleware())
 }
 
 func handleRoot(c echo.Context) error {
